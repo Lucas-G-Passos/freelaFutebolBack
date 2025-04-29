@@ -31,7 +31,9 @@ app.use((req, res, next) => {
 app.use("/api",verifyJWT, router, routerPDF);
 app.use("/auth", routerLogin);
 
-const PORT = 5000;
-app.listen(PORT, () => {
-  console.log(`http://192.168.1.171:${PORT}`);
-});
+const port = 5000;
+const server = app.listen(port, () => console.log(`Backend listening on port ${port}!`));
+
+server.keepAliveTimeout = 120 * 1000;
+server.headersTimeout = 120 * 1000;
+
