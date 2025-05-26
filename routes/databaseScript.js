@@ -1,6 +1,5 @@
 import {
   getByField,
-  insertIntoTable,
   getAlunos,
   getEnderecos,
   getPagamentos,
@@ -12,10 +11,18 @@ import {
   getNAlunos,
   updateInTable,
   getAniversariantes,
+  getFiliais,
 } from "./functions/functions.js";
+
+import {
+  getNFuncionarios,
+  getFuncionarios,
+  getAllFuncionario,
+} from "./functions/functionFuncionario.js";
 import express from "express";
 import multer from "multer";
 import uploadImage from "./../imgKit.js";
+import db from "../db.js";
 const router = express.Router();
 
 router.use(express.json());
@@ -111,6 +118,15 @@ router.get("/turmas", async (req, res) => {
     res.status(500).json({ error: "Query falha" });
   }
 });
+router.get("/filial", async (req, res) => {
+  try {
+    const filial = await getFiliais();
+    res.json(filial || { message: "no filial" });
+  } catch (error) {
+    console.error("error getting filial:", error);
+    res.status(500).json({ error: "Query falha" });
+  }
+});
 
 router.get("/aluno/total", async (req, res) => {
   try {
@@ -123,6 +139,20 @@ router.get("/aluno/total", async (req, res) => {
     res.status(500).json({
       success: false,
       error: "Failed to fetch student count",
+    });
+  }
+});
+router.get("/funcionario/total", async (req, res) => {
+  try {
+    const total = await getNFuncionarios();
+    res.json({
+      total: total || 0,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to get funcionario count",
     });
   }
 });
@@ -168,35 +198,192 @@ router.post("/aluno/check", async (req, res) => {
     res.status(500).json({ error: "Falha na busca" });
   }
 });
-
-router.post("/insert", validateInsertData, async (req, res) => {
-  const { tableName, data } = req.body;
-  console.log("Recebendo dados validados:", req.body);
-
+router.post("/funcionario/check", async (req, res) => {
+  const { field, value } = req.body;
   try {
-    const result = await insertIntoTable(tableName, data);
-    res.json({
-      success: true,
-      id: result.insertId,
-      message: `${tableName} inserido com sucesso`,
-    });
+    const funcionario = await getFuncionarios(field, value);
+    res.json(funcionario || { message: "Funcionario não encontrado" });
   } catch (error) {
-    console.error(`Erro na inserção (${tableName}):`, error);
-
-    const response = {
-      error: "Erro no banco de dados",
-      details: error.message,
-    };
-
-    if (error.code === "ER_DATA_TOO_LONG") {
-      response.details = "Dados excedem o tamanho permitido";
-      response.field = error.sqlMessage.match(/column '(.+)'/i)?.[1];
-    }
-
-    res.status(500).json(response);
+    console.error("error fetching funcionario: ", error);
+  }
+});
+router.get("/funcionario", async (req, res) => {
+  try {
+    const funcionario = await getAllFuncionario();
+    res.json(funcionario || { message: "Funcionario não encontrado" });
+  } catch (error) {
+    console.error("error fetching funcionario: ", error);
+    throw new Error("Erro ao buscar funcionario: ", error);
   }
 });
 
+router.post("/insert", async (req, res) => {
+  const { tableName, data } = req.body;
+  console.log("Recebendo dados para inserção:", req.body);
+
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    // Validações específicas por tabela
+    switch (tableName) {
+      case "endereco":
+        if (data.cep) {
+          const cepRaw = data.cep.replace(/-/g, "");
+          if (!/^\d{8}$/.test(cepRaw)) {
+            throw {
+              code: "INVALID_CEP",
+              message: "CEP deve conter 8 dígitos numéricos",
+              field: "cep",
+            };
+          }
+          data.cep = cepRaw;
+        }
+        break;
+
+      case "alunos":
+        if (!data.nome_completo) {
+          throw {
+            code: "MISSING_FIELD",
+            message: "Nome completo é obrigatório",
+            field: "nome_completo",
+          };
+        }
+        // Adicionar outras validações específicas do aluno
+        break;
+
+      case "responsaveis":
+        if (!data.grau_parentesco) {
+          throw {
+            code: "MISSING_FIELD",
+            message: "Grau de parentesco é obrigatório",
+            field: "grau_parentesco",
+          };
+        }
+        break;
+    }
+
+    // Executa a inserção
+    const [result] = await conn.query(`INSERT INTO ${tableName} SET ?`, [data]);
+
+    // Commit da transação
+    await conn.commit();
+
+    // Busca o registro recém-inserido
+    const [newRecord] = await conn.query(
+      `SELECT * FROM ${tableName} WHERE id = ?`,
+      [result.insertId]
+    );
+
+    res.json({
+      success: true,
+      data: newRecord[0],
+      message: `${tableName} inserido com sucesso`,
+    });
+  } catch (error) {
+    await conn.rollback();
+    console.error(`Erro na inserção (${tableName}):`, error);
+
+    // Mapeamento de erros conhecidos
+    const response = {
+      error: error.code || "DATABASE_ERROR",
+      message: error.message || "Erro no banco de dados",
+      field: error.field || null,
+    };
+
+    // Tratamento específico para códigos de erro do MySQL
+    if (error.code === "ER_DATA_TOO_LONG") {
+      response.message = "Dados excedem o tamanho permitido";
+      response.field = error.sqlMessage.match(/column '(.+)'/i)?.[1];
+    }
+
+    res.status(error.code === "MISSING_FIELD" ? 400 : 500).json(response);
+  } finally {
+    conn.release();
+  }
+});
+router.post("/funcionario/update", async (req, res) => {
+  const { funcionario, endereco } = req.body;
+  console.log(funcionario, endereco);
+  const c = await db.getConnection();
+  try {
+    await c.beginTransaction();
+
+    await c.query(
+      `UPDATE endereco 
+   SET cep = ?, cidade = ?, estado = ?, rua = ?, numero = ? 
+   WHERE id = ?`,
+      [
+        endereco.cep,
+        endereco.cidade,
+        endereco.estado,
+        endereco.rua,
+        endereco.numero,
+        endereco.id,
+      ]
+    );
+
+    await c.query(
+      `UPDATE funcionarios 
+       SET
+           cargo = ?,
+           telefone1 = ?, 
+           telefone2 = ?, 
+           foto = ?, 
+           jornada_escala = ?, 
+           situacao = ?
+       WHERE id = ?`,
+      [
+        funcionario.cargo,
+        funcionario.telefone1,
+        funcionario.telefone2,
+        funcionario.foto,
+        funcionario.jornada_escala,
+        funcionario.situacao,
+        funcionario.id,
+      ]
+    );
+
+    const [rows] = await c.query(
+      `SELECT 
+      f.id,
+      f.nome_completo,
+      f.data_nascimento,
+      f.telefone1,
+      f.telefone2,
+      f.cargo,
+      f.rg,
+      f.cpf,
+      f.data_admissao,
+      f.foto,
+      f.jornada_escala,
+      f.situacao,
+      fil.nome AS filial_nome,
+      func_endereco.cep,
+      func_endereco.cidade,
+      func_endereco.estado,
+      func_endereco.rua,
+      func_endereco.numero AS numero_rua,
+      func_endereco.id AS endereco_id
+    FROM 
+      funcionarios f
+    LEFT JOIN filial fil 
+      ON f.id_filial = fil.id
+    LEFT JOIN endereco func_endereco 
+      ON f.id_endereco = func_endereco.id
+    WHERE f.id = ?`,
+      [funcionario.id]
+    );
+    await c.commit();
+    res.status(200).json(rows[0]);
+  } catch (error) {
+    await c.rollback();
+    res.status(500).json({ error: "Erro interno ao atualizar funcionário" });
+    console.error("Erro ao atualizar funcionario: ", error);
+  } finally {
+    c.release();
+  }
+});
 router.put("/aluno/update", async (req, res) => {
   const { aluno, endereco, responsavel } = req.body;
 
@@ -204,7 +391,7 @@ router.put("/aluno/update", async (req, res) => {
     return res.status(400).json({ error: "IDs obrigatórios não fornecidos" });
   }
 
-  const conn = await pool.getConnection();
+  const conn = await db.getConnection();
   try {
     await conn.beginTransaction();
 
@@ -305,6 +492,24 @@ router.put("/aluno/update", async (req, res) => {
 });
 
 const upload = multer({ storage: multer.memoryStorage() });
+
+router.post(
+  "/funcionario/insertImage",
+  upload.single("foto"),
+  async (req, res) => {
+    try {
+      const file = req.file;
+      if (!file) {
+        return res.status(400).json({ error: "Nenhuma imagem enviada" });
+      }
+      const fotoUrl = await uploadImage(file);
+      res.json({ fotoUrl });
+    } catch (error) {
+      console.error("Erro no upload da imagem: ", error);
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
 
 router.post("/aluno/insertimage", upload.single("foto"), async (req, res) => {
   try {

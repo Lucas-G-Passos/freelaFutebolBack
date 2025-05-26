@@ -136,6 +136,24 @@ async function getTurmas() {
     throw error;
   }
 }
+async function getFiliais() {
+  try {
+    const [rows] = await db.query(`SELECT 
+    filial.id AS filial_id,
+    filial.nome AS filial_nome,
+    endereco.cep,
+    endereco.cidade,
+    endereco.estado,
+    endereco.numero,
+    endereco.rua
+    FROM filial
+    INNER JOIN endereco ON filial.id_endereco = endereco.id;`);
+
+    return rows;
+  } catch (error) {
+    console.error('db error (filiais): ',error)
+  }
+}
 
 async function getInadimplenteNum() {
   try {
@@ -167,7 +185,7 @@ async function getByField(
       let query = `
         SELECT 
   a.id AS aluno_id,
-  a.id_turma, -- ✅ Campo adicionado
+  a.id_turma,
   a.nome_completo,
   a.data_nascimento,
   a.data_matricula,
@@ -361,7 +379,7 @@ async function getCompleteAluno(id) {
   }
 }
 
-async function getAniversariantes(){
+async function getAniversariantes() {
   try {
     const [aluno] = await db.query(
       `SELECT 
@@ -415,11 +433,11 @@ async function getAniversariantes(){
         AND a.data_nascimento IS NOT NULL
       ORDER BY DAY(a.data_nascimento)
       `
-    )
-    return aluno || null
+    );
+    return aluno || null;
   } catch (error) {
-    console.error('Erro ao pegar aniversariantes: '+error);
-    throw error
+    console.error("Erro ao pegar aniversariantes: " + error);
+    throw error;
   }
 }
 
@@ -437,5 +455,6 @@ export {
   getAdimplente,
   getNAlunos,
   getInadimplenteNum,
-  getAniversariantes
+  getAniversariantes,
+  getFiliais
 };
