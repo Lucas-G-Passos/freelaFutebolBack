@@ -1,12 +1,8 @@
 import bcrypt from 'bcrypt';
-const args = process.argv
+
 const salt = 10 
 
+let username = await bcrypt.hash('Admin',salt)
+var password = await bcrypt.hash("passos209009",salt)
 
-function encrypt(user, pass){
-    const hashedUser = await bcrypt.hash(parseString(user),salt);
-    const hashedPass = await bcrypt.hash(parseString(pass),salt);
-
-    console.log(`Username:${hashedUser}    Password:${hashedPass}`);
-    return
-}
+console.log(username+' '+password)
