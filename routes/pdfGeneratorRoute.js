@@ -82,7 +82,6 @@ router.post("/pdf", async (req, res) => {
       },
     };
 
-    console.log(pdfData);
     // Gera PDF
     const raw = await createPDF(pdfData);
     const pdfBuffer = Buffer.isBuffer(raw) ? raw : Buffer.from(raw);
