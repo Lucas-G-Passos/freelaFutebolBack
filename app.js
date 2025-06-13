@@ -26,7 +26,6 @@ app.use((req, res, next) => {
   console.log("Body:", req.body);
   next();
 });
-app.use(express.static("public"), verifyJWT);
 app.use("/api", verifyJWT, router, routerPDF, routerImport);
 app.use("/auth", routerLogin);
 
