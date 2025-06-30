@@ -538,4 +538,65 @@ router.get("/aluno/aniversariantes", async (req, res) => {
   }
 });
 
+router.post("/turmas/delete", async (req, res) => {
+  const { id, nome } = req.body;
+  if (!id || !nome)
+    return res.status(400).json({ error: "Dados incompletos." });
+
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    // 1. Obter todos os alunos da turma
+    const [alunos] = await conn.query(
+      "SELECT id, id_endereco FROM alunos WHERE id_turma = ?",
+      [id]
+    );
+    const alunoIds = alunos.map((a) => a.id);
+    const enderecoIds = alunos.map((a) => a.id_endereco);
+
+    if (alunoIds.length > 0) {
+      // 2. Deletar pagamentos dos responsáveis desses alunos
+      await conn.query(
+        `
+        DELETE p FROM pagamentos p
+        JOIN responsaveis r ON p.responsavel_id = r.id
+        WHERE r.id_aluno IN (?)`,
+        [alunoIds]
+      );
+
+      // 3. Deletar responsáveis
+      await conn.query("DELETE FROM responsaveis WHERE id_aluno IN (?)", [
+        alunoIds,
+      ]);
+
+      // 4. Deletar os alunos
+      await conn.query("DELETE FROM alunos WHERE id IN (?)", [alunoIds]);
+
+      // 5. Opcional: deletar endereços se não forem usados por outros
+      if (enderecoIds.length > 0) {
+        await conn.query("DELETE FROM endereco WHERE id IN (?)", [enderecoIds]);
+      }
+    }
+
+    // 6. Deletar a turma
+    await conn.query("DELETE FROM turmas WHERE id = ? AND nome = ?", [
+      id,
+      nome,
+    ]);
+
+    await conn.commit();
+    res.json({
+      success: true,
+      message: "Turma e dados relacionados foram deletados.",
+    });
+  } catch (err) {
+    await conn.rollback();
+    console.error("Erro ao deletar turma:", err);
+    res.status(500).json({ error: "Erro interno ao deletar turma." });
+  } finally {
+    conn.release();
+  }
+});
+
 export default router;
