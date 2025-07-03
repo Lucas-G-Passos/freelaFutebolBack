@@ -288,7 +288,6 @@ router.post("/insert", async (req, res) => {
 });
 router.post("/funcionario/update", async (req, res) => {
   const { funcionario, endereco } = req.body;
-  console.log(funcionario, endereco);
   const c = await db.getConnection();
   try {
     await c.beginTransaction();
@@ -535,6 +534,51 @@ router.get("/aluno/aniversariantes", async (req, res) => {
   } catch (error) {
     console.error("Erro ao buscar Aniversariantes" + error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+router.post("/turmas/update", async (req, res) => {
+  const { turma } = req.body;
+  const c = await db.getConnection();
+  try {
+    await c.beginTransaction();
+    await c.query(
+      `UPDATE turmas
+                  SET
+                    nome = ?,
+                    codigo_turma = ?,
+                    descricao = ?,
+                    dias_semana = ?,
+                    hora_inicio = ?,
+                    hora_termino = ?,
+                    sala = ?
+                  WHERE id = ?;
+`,
+      [
+        turma.nome,
+        turma.codigo_turma,
+        turma.descricao,
+        Array.isArray(turma.dias_semana)
+          ? turma.dias_semana.join(",")
+          : turma.dias_semana,
+        turma.hora_inicio,
+        turma.hora_termino,
+        turma.sala,
+        turma.id,
+      ]
+    );
+
+    const rows = await c.query(`SELECT * FROM turmas WHERE id = ?`, [
+      turma.id,
+    ]);
+    await c.commit();
+    res.status(200).json(rows);
+  } catch (error) {
+    await c.rollback();
+    res.status(500).json({ error: "erro interno ao atualizar funcionário" });
+    console.error("erro interno ao atualizar turma:", error);
+  } finally {
+    c.release();
   }
 });
 
