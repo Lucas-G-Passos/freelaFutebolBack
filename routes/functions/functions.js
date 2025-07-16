@@ -183,105 +183,65 @@ async function getByField(
 ) {
   try {
     if (table === "alunos") {
-      let query = `
+      const baseSelect = `
         SELECT 
-  a.id AS aluno_id,
-  a.id_turma,
-  a.nome_completo,
-  a.data_nascimento,
-  a.data_matricula,
-  a.telefone1,
-  a.telefone2,
-  a.foto,
-  a.rg,
-  a.cpf,
-  a.convenio,
-  a.alergia,
-  a.uso_medicamento,
-  a.medicamento_horario,
-  a.atestado_medico,
-  a.colegio,
-  a.colegio_ano,
-  a.time_coracao,
-  a.indicacao,
-  a.observacao,
-  a.ativo,
-  t.nome AS nome_turma,
-  -- Campos de responsáveis
-  r.id AS responsavel_id,
-  r.nome AS responsavel_nome,
-  r.rg AS responsavel_rg,
-  r.cpf AS responsavel_cpf,
-  r.grau_parentesco,
-  -- Campos de endereço
-  e.id AS endereco_id,
-  e.cep,
-  e.cidade,
-  e.estado,
-  e.numero,
-  e.rua,
-  -- Lógica de situação de pagamento
-  CASE 
-    WHEN EXISTS (
-      SELECT 1 FROM responsaveis r2
-      JOIN pagamentos p ON p.responsavel_id = r2.id
-      WHERE r2.id_aluno = a.id AND (p.status = 'pago' OR p.data_vencimento >= CURDATE())
-    ) THEN 'Adimplente'
-    ELSE 'Inadimplente'
-  END AS situacao_pagamento
-FROM alunos a
-LEFT JOIN turmas t ON a.id_turma = t.id -- Join com turmas
-JOIN endereco e ON a.id_endereco = e.id
-LEFT JOIN responsaveis r ON r.id_aluno = a.id
-WHERE a.${field} COLLATE utf8mb4_unicode_ci LIKE ?`;
+          a.id AS aluno_id,
+          a.id_turma,
+          a.nome_completo,
+          a.data_nascimento,
+          a.data_matricula,
+          a.telefone1,
+          a.telefone2,
+          a.foto,
+          a.rg,
+          a.cpf,
+          a.convenio,
+          a.alergia,
+          a.uso_medicamento,
+          a.medicamento_horario,
+          a.atestado_medico,
+          a.colegio,
+          a.colegio_ano,
+          a.time_coracao,
+          a.indicacao,
+          a.observacao,
+          a.ativo,
+          t.nome AS nome_turma,
+          r.id AS responsavel_id,
+          r.nome AS responsavel_nome,
+          r.rg AS responsavel_rg,
+          r.cpf AS responsavel_cpf,
+          r.grau_parentesco,
+          e.id AS endereco_id,
+          e.cep,
+          e.cidade,
+          e.estado,
+          e.numero,
+          e.rua,
+          CASE 
+            WHEN EXISTS (
+              SELECT 1 FROM responsaveis r2
+              JOIN pagamentos p ON p.responsavel_id = r2.id
+              WHERE r2.id_aluno = a.id AND (p.status = 'pago' OR p.data_vencimento >= CURDATE())
+            ) THEN 'Adimplente'
+            ELSE 'Inadimplente'
+          END AS situacao_pagamento
+        FROM alunos a
+        LEFT JOIN turmas t ON a.id_turma = t.id
+        LEFT JOIN responsaveis r ON r.id_aluno = a.id
+        JOIN endereco e ON a.id_endereco = e.id
+      `;
+
+      let query = `${baseSelect} WHERE a.${field} COLLATE utf8mb4_unicode_ci LIKE ?`;
       let params = [`%${value}%`];
+
       if (["cpf", "rg", "matricula"].includes(field)) {
-        query = query.replace("LIKE ?", "= ?");
+        query = `${baseSelect} WHERE a.${field} = ?`;
         params = [value];
       }
 
       if (field === "turma") {
-        query = `
-          SELECT 
-            a.nome_completo,
-            a.data_nascimento,
-            a.data_matricula,
-            a.telefone1,
-            a.telefone2,
-            a.foto,
-            a.rg,
-            a.cpf,
-            a.convenio,
-            a.alergia,
-            a.uso_medicamento,
-            a.medicamento_horario,
-            a.atestado_medico,
-            a.colegio,
-            a.colegio_ano,
-            a.time_coracao,
-            a.indicacao,
-            a.observacao,
-            a.ativo,
-            t.nome AS nome_turma,
-            (SELECT nome FROM responsaveis r WHERE r.id_aluno = a.id LIMIT 1) AS nome_responsavel,
-            e.cep,
-            e.cidade,
-            e.estado,
-            e.numero,
-            e.rua,
-            CASE 
-              WHEN EXISTS (
-                SELECT 1 FROM responsaveis r2
-                JOIN pagamentos p ON p.responsavel_id = r2.id
-                WHERE r2.id_aluno = a.id AND (p.status = 'pago' OR p.data_vencimento >= CURDATE())
-              ) THEN 'Adimplente'
-              ELSE 'Inadimplente'
-            END AS situacao_pagamento
-          FROM alunos a
-          LEFT JOIN turmas t ON a.id_turma = t.id
-          JOIN endereco e ON a.id_endereco = e.id
-          WHERE t.id = ?;
-        `;
+        query = `${baseSelect} WHERE t.id = ?`;
         params = [value];
       }
 

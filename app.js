@@ -7,6 +7,7 @@ import routerPDF from "./routes/pdfGeneratorRoute.js";
 import { configDotenv } from "dotenv";
 import routerImport from "./routes/importExport/importAlunos.js";
 import routerUser from "./routes/usuarioCreate.js";
+import path from "path";
 configDotenv();
 
 const SECRET = process.env.SECRET;
@@ -30,6 +31,7 @@ app.use(express.json());
 
 app.use("/api", router, routerPDF, routerImport, routerUser);
 app.use("/auth", routerLogin);
+app.use("/images", express.static('./public'));
 
 const PORT = 5000;
 app.listen(PORT, () => {
