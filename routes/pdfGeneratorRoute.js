@@ -30,7 +30,7 @@ async function getPagbyId(id) {
   return rows[0];
 }
 
-router.post("/pdf", verifyJWT("read"), async (req, res) => {
+router.post("/pdf", verifyJWT(["read"]), async (req, res) => {
   try {
     const requiredFields = {
       aluno: {
