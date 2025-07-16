@@ -43,6 +43,11 @@ export default async function createPDF(data) {
     const templatePath = path.join(__dirname, "pdfTemplate", "pdf.hbs");
     const templateHtml = fs.readFileSync(templatePath, "utf8");
 
+    const svgPath = path.join(__dirname, "pdfTemplate", "escudo.svg");
+    const svgBuffer = fs.readFileSync(svgPath);
+    const svgBase64 = svgBuffer.toString("base64");
+    data.escudoBase64 = `data:image/svg+xml;base64,${svgBase64}`;
+
     // Compila o template
     const template = handlebars.compile(templateHtml);
     const html = template(data);
